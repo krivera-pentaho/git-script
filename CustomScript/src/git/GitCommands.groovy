@@ -95,8 +95,7 @@ class GitCommands {
       return;
     }
 
-    print("If there are no conflicts, would you like to continue to commit changes? (y,n): ");
-    String out = read();
+    String out = read("If there are no conflicts, would you like to continue to commit changes? (y,n)");
 
     if (!out.equals("y")){
       return;
@@ -108,10 +107,23 @@ class GitCommands {
   public static gitCommit(String dir) {
     verifyInGitDir(dir);
 
+    printTitle("Check out dev");
+    println(executeShell("git checkout dev", dir));
+
     String changes = executeShell("git status --short", dir);
     println(changes);
 
-    String[] mods = [" A ", " M ", " D "];
+    String ADDITION = " A ";
+    String MODIFICATION = " M ";
+    String DELETION = " D ";
+    String UNTRACKED = "?? ";
+
+    String[] mods = [
+      ADDITION,
+      MODIFICATION,
+      DELETION,
+      UNTRACKED
+    ];
     for (int i = 0; i < mods.length; i++) {
       String mod = mods[i];
       Matcher m = Pattern.compile(mod+"(.+)").matcher(changes);
@@ -123,15 +135,18 @@ class GitCommands {
       boolean isDelete = false;
 
       switch (mod) {
-        case " A ":
+        case ADDITION:
           printTitle("Commit Additions");
           break;
-        case " M ":
+        case MODIFICATION:
           printTitle("Commit Modifications");
           break;
-        case " D ":
+        case DELETION:
           isDelete = true;
           printTitle("Commit Deletions");
+          break;
+        case UNTRACKED:
+          printTitle("Commit Untracked Changes");
           break;
 
         default:
@@ -144,8 +159,13 @@ class GitCommands {
 
       while (m.find()) {
         String toCommit = m.group(1);
-        print("[===== toCommit ====] Stage for commit? (y, n, all, esc): ");
-        String out = read();
+
+        // Skip non-file untracked changes
+        if (mod.equals(UNTRACKED) && !toCommit.contains(".")){
+          continue;
+        }
+
+        String out = read("[===== $toCommit ====] Stage for commit? (y, n, all, esc)");
 
         if (out.equals("all")) {
           all = true;
@@ -160,7 +180,6 @@ class GitCommands {
         // Stage for addition/deletion
         if (all || out.equals("y")){
           if (isDelete){
-            println(executeShell("git checkout $toCommit", dir));
             println(executeShell("git rm $toCommit", dir));
           } else {
             println(executeShell("git add $toCommit", dir));
@@ -168,19 +187,18 @@ class GitCommands {
         }
       }
 
-      print("Would you like to commit these changes to your local repository? (y,n): ");
-      String out = read();
+      String out = read("Would you like to commit these changes to your local repository? (y,n)");
 
       if (!out.equals("y")){
         return;
       }
 
-      printTitle("Check out dev and commit");
-      println(executeShell("git checkout dev", dir));
-      println(executeShell("git commit", dir));
+      String commitMsg = read("Commit message");
 
-      print("Would you like to push your commit(s) to your origin? (y,n): ");
-      out = read();
+      printTitle("commit");
+      println(executeShell("git commit -m $commitMsg", dir));
+
+      out = read("Would you like to push your commit(s) to your origin? (y,n)");
 
       if (!out.equals("y")){
         return;
@@ -193,8 +211,7 @@ class GitCommands {
 
   public static gitCloneSetup(String dir) {
 
-    print("Are you currently in the directory where you would like to clone your repository? (y,n): ");
-    String out = read();
+    String out = read("Are you currently in the directory where you would like to clone your repository? (y,n)");
 
     if (!out.equals("y")){
       return;
@@ -202,8 +219,7 @@ class GitCommands {
 
     String url = "";
     while (!verifyGitUrl(url)) {
-      print("URL to clone: ");
-      url = read();
+      url = read("URL to clone");
     }
 
     printTitle("Clone repository");
@@ -232,8 +248,7 @@ class GitCommands {
 
       String url = "";
       while (!verifyGitUrl(url)){
-        print("Please provide remote upstream url: ");
-        url = read();
+        url = read("Please provide remote upstream url");
       }
       executeShell("git remote add upstream $url", dir);
       println(executeShell("git remote show", dir));
@@ -250,6 +265,8 @@ class GitCommands {
 
   public static gitUpdate(String dir) {
     verifyInGitDir(dir);
+
+    gitSetup(dir);
 
     printTitle("Stash Changes");
     println(executeShell("git stash", dir));
@@ -320,10 +337,11 @@ class GitCommands {
 
     lastExitValue = exec.exitValue();
 
-    return lastExitValue == 0 ? sout.toString() : serr.toString();
+    return lastExitValue == 0 ? sout.toString() : "ERROR: $serr.toString()";
   }
 
-  private static   String read() {
+  private static   String read(String msg) {
+    print(msg + ": ");
     BufferedReader br = new BufferedReader(new InputStreamReader(System.in))
     return br.readLine();
   }
